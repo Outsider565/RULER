@@ -39,7 +39,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 from tokenizer import select_tokenizer
 from manifest_utils import write_manifest
-from scipy.special import zeta
+from mpmath import zeta as mp_zeta
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -71,6 +71,12 @@ np.random.seed(args.random_seed)
 # Load Tokenizer
 TOKENIZER = select_tokenizer(args.tokenizer_type, args.tokenizer_path)
 
+
+def riemann_zeta(alpha: float) -> float:
+    """Lightweight replacement for scipy.special.zeta(alpha)."""
+    return float(mp_zeta(alpha))
+
+
 def generate_input_output(max_len, num_words=-1, coded_wordlen=6, vocab_size=2000, incremental=10, alpha=2.0):
     # generate vocab
     vocab = [''.join(random.choices(string.ascii_lowercase, k=coded_wordlen)) for _ in range(vocab_size)]
@@ -84,7 +90,7 @@ def generate_input_output(max_len, num_words=-1, coded_wordlen=6, vocab_size=200
     template = args.template
     def gen_text(num_words):
         k = np.arange(1, len(vocab)+1)
-        sampled_cnt = num_words*(k**-alpha)/zeta(alpha)
+        sampled_cnt = num_words*(k**-alpha)/riemann_zeta(alpha)
         sampled_words = [[w] * zi for w, zi in zip(vocab, sampled_cnt.astype(int))]
         sampled_words = [x for wlst in sampled_words for x in wlst]
         random.Random(args.random_seed).shuffle(sampled_words)

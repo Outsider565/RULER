@@ -13,6 +13,11 @@
 # limitations under the License
 
 import json
+from pathlib import Path
+from typing import Union
+
+
+PathLike = Union[str, Path]
 
 
 def write_manifest(output_path, target_manifest, ensure_ascii: bool = True):
@@ -30,3 +35,10 @@ def write_manifest(output_path, target_manifest, ensure_ascii: bool = True):
         for tgt in target_manifest:
             json.dump(tgt, outfile, ensure_ascii=ensure_ascii)
             outfile.write('\n')
+
+
+def read_manifest(manifest_path: PathLike) -> list:
+    """Load a JSONL manifest into memory."""
+    path = Path(manifest_path)
+    with path.open("r", encoding="utf-8") as infile:
+        return [json.loads(line) for line in infile if line.strip()]

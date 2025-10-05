@@ -210,10 +210,10 @@ class OpenAIClient:
             'gpt-4': 128000,
             'gpt-35-turbo-16k': 16384,
         }
-        self.openai_api_key = os.environ["OPENAI_API_KEY"]
-        self.azure_api_id = os.environ["AZURE_API_ID"]
-        self.azure_api_secret = os.environ["AZURE_API_SECRET"]
-        self.azure_api_endpoint = os.environ["AZURE_API_ENDPOINT"]
+        self.openai_api_key = os.environ.get("OPENAI_API_KEY", "")
+        self.azure_api_id = os.environ.get("AZURE_API_ID", "")
+        self.azure_api_secret = os.environ.get("AZURE_API_SECRET", "")
+        self.azure_api_endpoint = os.environ.get("AZURE_API_ENDPOINT", "")
         self.model_name = model_name    
             
         # Azure
@@ -223,7 +223,17 @@ class OpenAIClient:
         
         import tiktoken
         self.encoding = tiktoken.get_encoding("cl100k_base")
-        self.max_length = model2length[self.model_name]
+        env_max_length = os.environ.get("OPENAI_MAX_LENGTH")
+        if env_max_length is not None:
+            try:
+                self.max_length = int(env_max_length)
+            except ValueError:
+                print(f"Invalid OPENAI_MAX_LENGTH '{env_max_length}', falling back to model defaults.")
+                self.max_length = model2length.get(self.model_name)
+        else:
+            self.max_length = model2length.get(self.model_name)
+        if self.max_length is None:
+            print(f"[OpenAIClient] Unknown context length for model '{self.model_name}'. No max length constraint will be enforced.")
         self.generation_kwargs = generation_kwargs
         self._create_client()
         
@@ -290,17 +300,22 @@ class OpenAIClient:
         user_assistant_msgs = [{"role": "user", "content": prompt}]
         msgs = system_msg + user_assistant_msgs
         openai_length = self._count_tokens(msgs)
-        request = self.generation_kwargs
-        
-        tokens_to_generate_new = self.max_length - openai_length
-        if tokens_to_generate_new < request['tokens_to_generate']:
-            print(f"Reduce generate tokens from {request['tokens_to_generate']} to {tokens_to_generate_new}")
-            request['tokens_to_generate'] = tokens_to_generate_new
+        request = dict(self.generation_kwargs)
+
+        if self.max_length is not None:
+            tokens_to_generate_new = self.max_length - openai_length
+            if tokens_to_generate_new < request['tokens_to_generate']:
+                print(f"Reduce generate tokens from {request['tokens_to_generate']} to {tokens_to_generate_new}")
+                request['tokens_to_generate'] = max(tokens_to_generate_new, 0)
     
         request["msgs"] = msgs
         outputs = self._send_request(request)
         response = {'text': [outputs.choices[0].message.content]}
         return response
+
+    def process_batch(self, prompts, **kwargs):
+        """Mimic the interface exposed by the base Client wrapper."""
+        return [self(prompt, **kwargs) for prompt in prompts]
 
     
     def get_azure_api_key(
@@ -413,4 +428,3 @@ class GeminiClient:
         import google.generativeai as genai
         genai.configure(api_key=os.environ["GEMINI_API_KEY"])
         return genai.GenerativeModel(self.model_name)
-

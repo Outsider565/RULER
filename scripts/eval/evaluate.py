@@ -27,6 +27,8 @@ import re
 import os
 import argparse
 import nltk
+import sys
+from pathlib import Path
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:
@@ -35,10 +37,15 @@ except LookupError:
 import pandas as pd
 import importlib
 import yaml
-from pathlib import Path
 from tqdm import tqdm
 from collections import defaultdict
-from nemo.collections.asr.parts.utils.manifest_utils import read_manifest, write_manifest
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+DATA_DIR = SCRIPT_DIR.parent / "data"
+if str(DATA_DIR) not in sys.path:
+    sys.path.append(str(DATA_DIR))
+
+from manifest_utils import read_manifest, write_manifest
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--data_dir", type=str, required=True, help='path to the prediction jsonl files')
