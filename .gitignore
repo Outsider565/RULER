@@ -4,3 +4,4 @@ __pycache__/
 .vscode/
 *.out
 scripts/data/synthetic/json/*_html
+scripts/data/synthetic/json/essay_repo
