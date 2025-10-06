@@ -101,6 +101,29 @@ if args.server_type == 'hf' or args.server_type == 'gemini':
     args.threads = 1
 
 
+def build_prompt(sample: dict) -> str:
+    """Inject answer prefix guidance when available."""
+    prompt = sample['input']
+    answer_prefix = sample.get('answer_prefix')
+    if answer_prefix:
+        instruction = (
+            "\n\nFollow the instructions carefully. "
+            "You must start your answer with the exact text shown below, "
+            "and no other content may precede it.\n"
+            f"Answer prefix: {answer_prefix}\n"
+            "Begin your answer now, starting with that prefix."
+        )
+        prompt = f"{prompt}{instruction}"
+    return prompt
+
+
+def build_metadata(sample: dict) -> dict:
+    metadata = dict(sample.get('others') or {})
+    if 'answer_prefix' in sample:
+        metadata['answer_prefix'] = sample['answer_prefix']
+    return metadata
+
+
 def get_llm(tokens_to_generate):
     if args.server_type == 'trtllm':
         from client_wrappers import TRTLLMClient
@@ -308,9 +331,9 @@ def main():
                 kwargs=dict(
                     idx_list=idx_list,
                     index_list=[data_point['index'] for data_point in batch],
-                    input_list=[data_point['input'] for data_point in batch],
+                    input_list=[build_prompt(data_point) for data_point in batch],
                     outputs_list=[data_point['outputs'] for data_point in batch],
-                    others_list=[data_point.get('others', {}) for data_point in batch],
+                    others_list=[build_metadata(data_point) for data_point in batch],
                     truncation_list=[data_point.get('truncation', -1) for data_point in batch],
                     length_list=[data_point.get('length', -1) for data_point in batch],
                 ),
