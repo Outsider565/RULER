@@ -94,6 +94,7 @@ parser.add_argument("--stop_words", type=str, default='')
 parser.add_argument("--sliding_window_size", type=int)
 parser.add_argument("--threads", type=int, default=4)
 parser.add_argument("--batch_size", type=int, default=1)
+parser.add_argument("--tokenizer_path", type=str, default="", help='optional HF tokenizer directory for OpenAI-compatible servers')
 
 args = parser.parse_args()
 args.stop_words = list(filter(None, args.stop_words.split(',')))
@@ -175,6 +176,7 @@ def get_llm(tokens_to_generate):
         from client_wrappers import OpenAIClient
         llm = OpenAIClient(
             model_name=args.model_name_or_path,
+            hf_tokenizer_path=args.tokenizer_path or None,
             temperature=args.temperature,
             top_k=args.top_k,
             top_p=args.top_p,

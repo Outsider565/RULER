@@ -189,6 +189,7 @@ class OpenAIClient:
     def __init__(
         self,
         model_name,
+        hf_tokenizer_path=None,
         **generation_kwargs
     ):  
         model2length = {
@@ -215,14 +216,35 @@ class OpenAIClient:
         self.azure_api_secret = os.environ.get("AZURE_API_SECRET", "")
         self.azure_api_endpoint = os.environ.get("AZURE_API_ENDPOINT", "")
         self.model_name = model_name    
+        self.hf_tokenizer = None
+        self.hf_tokenizer_path = hf_tokenizer_path
+        if hf_tokenizer_path and os.path.exists(hf_tokenizer_path):
+            try:
+                from transformers import AutoTokenizer
+                self.hf_tokenizer = AutoTokenizer.from_pretrained(hf_tokenizer_path, trust_remote_code=True)
+                # Lift built-in max length caps so long prompts don't trigger errors.
+                big_length = 10 ** 12
+                for attr in ("model_max_length", "max_len_single_sentence", "max_len_sentences_pair"):
+                    if hasattr(self.hf_tokenizer, attr):
+                        try:
+                            setattr(self.hf_tokenizer, attr, big_length)
+                        except Exception:
+                            pass
+                if hasattr(self.hf_tokenizer, "init_kwargs"):
+                    self.hf_tokenizer.init_kwargs["model_max_length"] = big_length
+            except Exception as exc:
+                print(f"[OpenAIClient] Failed to load HF tokenizer at '{hf_tokenizer_path}': {exc}. Falling back to tiktoken.")
+                self.hf_tokenizer = None
             
         # Azure
         if self.azure_api_id and self.azure_api_secret:
             if 'gpt-3.5' in model_name: self.model_name = 'gpt-35-turbo-16k'
             if 'gpt-4' in model_name: self.model_name = 'gpt-4'
         
-        import tiktoken
-        self.encoding = tiktoken.get_encoding("cl100k_base")
+        self.encoding = None
+        if self.hf_tokenizer is None:
+            import tiktoken
+            self.encoding = tiktoken.get_encoding("cl100k_base")
         env_max_length = os.environ.get("OPENAI_MAX_LENGTH")
         if env_max_length is not None:
             try:
@@ -232,7 +254,13 @@ class OpenAIClient:
                 self.max_length = model2length.get(self.model_name)
         else:
             self.max_length = model2length.get(self.model_name)
-        if self.max_length is None:
+
+        # Allow unlimited context when using a supplied HF tokenizer unless an explicit
+        # environment override is provided.
+        if self.hf_tokenizer is not None and env_max_length is None:
+            self.max_length = None
+
+        if self.max_length is None and self.hf_tokenizer is None:
             print(f"[OpenAIClient] Unknown context length for model '{self.model_name}'. No max length constraint will be enforced.")
         self.generation_kwargs = generation_kwargs
         self._create_client()
@@ -259,6 +287,23 @@ class OpenAIClient:
             )
         
     def _count_tokens(self, messages):
+        if self.hf_tokenizer is not None:
+            try:
+                chat_text = self.hf_tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True,
+                )
+                token_ids = self.hf_tokenizer.encode(chat_text)
+                return len(token_ids)
+            except Exception as exc:
+                print(f"[OpenAIClient] Failed to apply chat template for HF tokenizer: {exc}. Falling back to per-message encoding.")
+                total = 0
+                for message in messages:
+                    content = message.get("content", "")
+                    total += len(self.hf_tokenizer.encode(content))
+                return total
+
         tokens_per_message = 3
         tokens_per_name = 1
         num_tokens = 0
