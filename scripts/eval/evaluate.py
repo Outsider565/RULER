@@ -26,9 +26,14 @@ python evaluate.py \
 import re
 import os
 import argparse
-import nltk
 import sys
 from pathlib import Path
+
+import nltk
+
+NLTK_EXTRA_PATH = Path(__file__).resolve().parent.parent.parent / "nltk_data"
+if NLTK_EXTRA_PATH.exists():
+    nltk.data.path.insert(0, str(NLTK_EXTRA_PATH))
 try:
     nltk.data.find('tokenizers/punkt')
 except LookupError:

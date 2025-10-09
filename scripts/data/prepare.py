@@ -39,6 +39,11 @@ import yaml
 from pathlib import Path
 from template import Templates
 import nltk
+
+NLTK_EXTRA_PATH = Path(__file__).resolve().parent.parent.parent / "nltk_data"
+if NLTK_EXTRA_PATH.exists():
+    nltk.data.path.insert(0, str(NLTK_EXTRA_PATH))
+
 try:
     nltk.data.find('tokenizers/punkt')
     # nltk.data.find('tokenizers/punkt_tab')
